@@ -1,0 +1,179 @@
+---
+title: "PS6"
+output: html_document
+date: "2023-11-27"
+author: "Matthew Zhuo"
+---
+### 1
+
+#### 1.1
+
+##### 1.1.1
+```{r}
+library(magrittr)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(tidyr)
+data <- read.delim("scripps-co2.csv.bz2")
+data <- data %>%
+  select(year,month,co2)
+head(data)
+```
+
+##### 1.1.2
+Each line represents the concentration of co2 in ppm for each month in a time period
+
+##### 1.1.3
+Missing values are recorded as -99.99 in this dataset
+```{r}
+for (i in 1:length(data$co2)) {
+  if (data$co2[i] < 0) {
+    print(data$co2[i])
+  }
+}
+```
+
+
+##### 1.1.4
+```{r}
+data$year %>%
+  min()
+data$year %>%
+  max()
+```
+
+
+##### 1.1.5
+```{r}
+data <- data[data$co2 != -99.99,]
+data$date <- make_date(year=data$year,month=data$month)
+data %>%
+  ggplot(aes(date,co2)) + geom_point(size=0.5) + geom_line() + labs(title="Co2 concentration from 1958 to 2023",subtitle = "From the scripps-co2 dataset",x="year",y="Co2 concentration in ppm")
+
+```
+
+##### 1.1.6
+The co2 concentration has increased over time
+
+#### 1.2
+
+###### 1.2.1
+```{r}
+Tempdata <- read.delim("hadcrut-5.0.1.0-annual.csv.bz2")
+head(Tempdata)
+```
+
+##### 1.2.2
+A line represents the degree in celsius and the confidence levels for that year
+
+##### 1.2.3
+```{r}
+Tempdata$Time %>%
+  min()
+Tempdata$Time %>%
+  max()
+```
+
+##### 1.2.4
+```{r}
+preindustrial <- Tempdata %>%
+  filter(Time<=1900) %>%
+  summarize(preindustrial_avg=mean(Anomaly..deg.C.))
+preindustrial
+secondAvg <- Tempdata %>%
+  filter(Time>=1961&Time<=1990) %>%
+  summarize("1961 to 1990 avg"=mean(Anomaly..deg.C.))
+secondAvg
+Tempdata$anomaly_diff <- Tempdata$Anomaly..deg.C.-secondAvg$`1961 to 1990 avg`
+head(Tempdata)
+```
+
+##### 1.2.5
+```{r}
+library(ggplot2)
+Tempdata %>%
+  ggplot(aes(Time,anomaly_diff)) + geom_point() + labs(title="how much Co2 concentration increased from 1850-2023",subtitle="From the hadcrut dataset",x="year",y="increase in Co2 concentration")
+```
+
+###### 1.2.6
+Co2 has increased over time
+
+#### 1.3
+
+##### 1.3.1
+Time/year
+
+##### 1.3.2
+you combine the data from each month into a year then combine the datasets
+
+##### 1.3.3
+```{r}
+data <- data %>%
+  group_by(year) %>%
+  summarize(avg_co2=mean(co2))
+Tempdata <- Tempdata %>%
+  rename(year=Time)
+mergedData <- right_join(data,Tempdata,by="year")
+head(mergedData)
+```
+
+##### 1.3.4
+```{r}
+mergedData %>%
+  ggplot(aes(avg_co2,anomaly_diff)) + geom_point(aes(color=year)) + geom_smooth(method=lm,se=FALSE) + geom_hline(yintercept = 1.5,color="red") + labs(title="Co2 concentration vs Temperature",subtitle="From the hadcrut dataset",x="Co2 concentration ppm",y="Temperature anomaly (w.r.t 1850-1900 average) Celcius",color="decade")
+```
+
+### 2
+
+##### 2.1
+```{r}
+uahData <- read.delim("UAH-lower-troposphere-wide.csv.bz2")
+uahData <- uahData %>%
+  select(year,month,globe)
+uahData %>%
+  head()
+```
+
+##### 2.2
+```{r}
+uahDataAvgs <- uahData %>%
+  group_by(year) %>%
+  summarize(uahAvg=mean(globe))
+head(uahDataAvgs)
+```
+
+##### 2.3
+```{r}
+Mergeddata <- Tempdata %>%
+  right_join(uahDataAvgs)
+Mergeddata <- Mergeddata %>%
+  select(year,anomaly_diff,uahAvg)
+Mergeddata <- Mergeddata %>%
+  rename("lower trophsphere"=uahAvg,surface=anomaly_diff)
+head(Mergeddata)
+```
+
+##### 2.4
+wide form
+
+##### 2.5
+```{r}
+Mergeddata <- Mergeddata %>%
+  pivot_longer(c(surface,`lower trophsphere`),names_to = "type",values_to = "anomaly")
+```
+
+
+##### 2.6
+```{r}
+Tempdata <- Tempdata %>%
+  filter(year >= 1980)
+Tempavg <- Tempdata %>%
+  summarize(avg=mean(Tempdata$Anomaly..deg.C.))
+Mergeddata$Temp_anomaly <- Tempdata$Anomaly..deg.C.-Tempavg
+Mergeddata %>%
+  ggplot(aes(year,anomaly)) + geom_point(aes(col=type)) + geom_smooth(data=subset(Mergeddata,Mergeddata$type != "surface"),method=lm,se=FALSE,color="red") + geom_smooth(data=subset(Mergeddata,Mergeddata$type != "lower trophsphere"),method=lm,se=FALSE,color="lightblue") + labs(title="temperature anomaly changes", subtitle="From the hadcrut and UAH datasets", x="year",y="temperature anomaly")
+```
+
+##### 2.6.a
+The surface has a higher increase in temperature over this time period
